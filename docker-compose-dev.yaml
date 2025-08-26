@@ -3,16 +3,20 @@ services:
   server:
     container_name: server
     image: server:latest
+    volumes:
+      - ./server/config.ini:/config.ini:ro
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
       - LOGGING_LEVEL=DEBUG
     networks:
       - testing_net
-
+      
   client1:
     container_name: client1
     image: client:latest
+    volumes:
+      - ./client/config.yaml:/config.yaml:ro
     entrypoint: /client
     environment:
       - CLI_ID=1
