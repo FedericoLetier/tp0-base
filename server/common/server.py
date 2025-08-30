@@ -75,4 +75,5 @@ class Server:
         self._stop = True
         if self._server_socket:
             self._server_socket.close() 
+            logging.info("action: shutdown | result: success | info: Server shutdown completed")
         

@@ -100,11 +100,11 @@ func (c *Client) StartClientLoop() {
 		case <-time.After(c.config.LoopPeriod):
 		}
 	}
-	c.conn.Close()
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
 
 func (c *Client) Close() {
+	log.Infof("action: shutdown | result: success | info: Client shutdown completed")
 	c.conn.Close()
 	c.keep_running = false
 }
