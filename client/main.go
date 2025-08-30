@@ -3,6 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+    "syscall"
+	"context"
+
 	"strings"
 	"time"
 
@@ -112,7 +116,8 @@ func main() {
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	
+	ctx, cancel := context.WithCancel(context.Background())	
+
 	client := common.NewClient(clientConfig)
 
 	go func() {
@@ -122,5 +127,5 @@ func main() {
 
 	}()
 
-	client.StartClientLoop()
+	client.StartClientLoop(ctx)
 }
