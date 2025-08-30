@@ -10,6 +10,14 @@ import (
 	"github.com/op/go-logging"
 )
 
+type Bet struct {
+    Name    string
+    Surname  string
+    Document string
+    Birth string
+    Number    string
+}
+
 var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
@@ -23,15 +31,17 @@ type ClientConfig struct {
 // Client Entity that encapsulates how
 type Client struct {
 	config ClientConfig
+	bet Bet
 	conn   net.Conn
 	keep_running bool
 }
 
 // NewClient Initializes a new client receiving the configuration
 // as a parameter
-func NewClient(config ClientConfig) *Client {
-	client := &Client{
+func NewClient(config ClientConfig, bet Bet) *Client {
+	client := &Client{	
 		config: config,
+		bet: bet,
 		keep_running: true,
 	}
 	return client
@@ -48,9 +58,46 @@ func (c *Client) createClientSocket() error {
 			c.config.ID,
 			err,
 		)
+		return err
 	}
 	c.conn = conn
 	return nil
+}
+
+func (c *Client) send_bet() error {
+	msg := fmt.Sprintf("%s,%s,%s,%s,%s,%s\n", "1", c.bet.Name, c.bet.Surname, c.bet.Document, c.bet.Birth, c.bet.Number)
+	data := []byte(msg)
+	total := 0
+	for total < len(data) {
+		n, err := c.conn.Write(data[total:])
+		if err != nil {
+			return err
+		}
+		total += n
+	}
+	return nil
+}
+
+func (c *Client) receive_message() {
+	reader := bufio.NewReader(c.conn)
+
+	msg, err := reader.ReadString('\n')
+	if err != nil && msg == "SUCCESS: Bet stored\n" {
+		if c.keep_running {
+			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+		}
+		return
+	}
+
+	// Log de confirmación
+	log.Infof("action: apuesta_enviada | result: success | dni: %s | number: %s", 
+		c.bet.Document, c.bet.Number)
+
+	// Cerrar la conexión
+	c.conn.Close()
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met
@@ -59,36 +106,16 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 	// Messages if the message amount threshold has not been surpassed	
 	for msgID := 1; msgID <= c.config.LoopAmount && c.keep_running; msgID++ {
 		// Create the connection the server in every loop iteration. Send an		
-		c.createClientSocket()
-			
-		// TODO: Modify the send to avoid short-write
-		fmt.Fprintf(
-			c.conn,
-			"[CLIENT %v] Message N°%v\n",
-			c.config.ID,
-			msgID,
-		)
-		msg, err := bufio.NewReader(c.conn).ReadString('\n')
-		c.conn.Close()
-
-		if err != nil && c.keep_running {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-				c.config.ID,
-				err,
-			)
-			return
+		if c.createClientSocket() == nil {
+			c.send_bet()
+			c.receive_message()
 		}
 
 		if !c.keep_running {
 			continue
 		}
-		
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-		c.config.ID, 
-		msg,
-		)
 	
-		// Wait a time between sending one message and the next one
+		// Wait a time between sending one message and the next on: receione
 		select {
 		case <-ctx.Done():
     		return

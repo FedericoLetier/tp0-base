@@ -1,5 +1,7 @@
 import socket
 import logging
+from common.conn_socket import Socket
+from common.utils import Bet, store_bets
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -18,7 +20,6 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        # TODO: Modify this program to handle signal to graceful shutdown
         # the server
         client_sock = None
         while not self._stop:
@@ -29,7 +30,6 @@ class Server:
         if client_sock:
             client_sock.close()
         self.close()
-        exit(0)
 
     def __handle_client_connection(self, client_sock):
         """
@@ -38,17 +38,25 @@ class Server:
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
-        try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
-            addr = client_sock.getpeername()
-            logging.info(f'action: receive_client_sock_message | result: success | ip: {addr[0]} | msg: {msg}')
-            # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
-        except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
-        finally:
+        msg = client_sock.recv(1024)
+        if not msg:
+            logging.error("action: receive_message | result: fail | error: Connection closed by peer")
             client_sock.close()
+            return
+        
+        split_msg = msg.split(',')
+        if len(split_msg) != 6:
+            logging.error("action: receive_message | result: fail | error: Invalid message format")
+            client_sock.send("ERROR: Invalid message format\n")
+            return
+        
+        bet = Bet(split_msg[0], split_msg[1], split_msg[2], split_msg[3], split_msg[4], split_msg[5])
+        store_bets([bet])
+        logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
+        msg = "SUCCESS: Bet stored\n"
+        if client_sock.send(msg) < 0:
+            logging.error("action: send_message | result: fail | error: Short write")
+        client_sock.close()
 
     def __accept_new_connection(self):
         """
@@ -69,7 +77,7 @@ class Server:
                 logging.error(f"action: accept_connections | result: fail | error: {e}")
                 return None
         logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
-        return c
+        return Socket(c)
     
     def close(self):
         self._stop = True

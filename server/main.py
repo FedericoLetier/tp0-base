@@ -33,7 +33,6 @@ def initialize_config():
 
     return config_params
 
-
 def main():
     config_params = initialize_config()
     logging_level = config_params["logging_level"]

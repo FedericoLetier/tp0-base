@@ -6,7 +6,6 @@ import (
 	"os/signal"
     "syscall"
 	"context"
-
 	"strings"
 	"time"
 
@@ -94,6 +93,27 @@ func PrintConfig(v *viper.Viper) {
 	)
 }
 
+func get_env_vars() common.Bet {
+	name := os.Getenv("NOMBRE")
+	surname := os.Getenv("APELLIDO")
+	document := os.Getenv("DOCUMENTO")
+	birth := os.Getenv("NACIMIENTO")
+	number := os.Getenv("NUMERO")
+
+	if name == "" || surname == "" || document == "" || birth == "" || number == "" {
+		log.Errorf("Faltan variables de entorno necesarias (NOMBRE, APELLIDO, DOCUMENTO, NACIMIENTO, NUMERO)")
+		return common.Bet{}
+	}
+
+	return common.Bet{
+		Name:      name,
+		Surname:   surname,
+		Document:  document,
+		Birth:     birth,
+		Number:    number,
+	}
+}
+
 func main() {
 	v, err := InitConfig()
 	if err != nil {
@@ -116,15 +136,18 @@ func main() {
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	ctx, cancel := context.WithCancel(context.Background())	
-
-	client := common.NewClient(clientConfig)
+	ctx, cancel := context.WithCancel(context.Background())
+	bet := get_env_vars()
+	if bet.Name == "" || bet.Surname == "" || bet.Document == "" || bet.Birth == "" || bet.Number == "" {
+    	os.Exit(1)
+	}
+	
+	client := common.NewClient(clientConfig, bet)
 
 	go func() {
 		<-sigs
 		cancel()
 		client.Close()
-
 	}()
 
 	client.StartClientLoop(ctx)
