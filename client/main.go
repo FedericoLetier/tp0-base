@@ -110,6 +110,17 @@ func main() {
 		LoopPeriod:    v.GetDuration("loop.period"),
 	}
 
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	
 	client := common.NewClient(clientConfig)
+
+	go func() {
+		<-sigs
+		cancel()
+		client.Close()
+
+	}()
+
 	client.StartClientLoop()
 }

@@ -1,6 +1,5 @@
 import socket
 import logging
-import signal
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -9,10 +8,6 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self._stop = False
-
-    def handle_sigterm(self, signum, frame):
-        logging.info("action: shutdown | result: success | info: Caught SIGTERM, shutting down")
-        self._stop = True
 
     def run(self):
         """
@@ -23,13 +18,13 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        signal.signal(signal.SIGTERM, self.handle_sigterm)
         # TODO: Modify this program to handle signal to graceful shutdown
         # the server
         client_sock = None
         while not self._stop:
             client_sock = self.__accept_new_connection()
-            self.__handle_client_connection(client_sock)
+            if client_sock:
+                self.__handle_client_connection(client_sock)
         
         if client_sock:
             client_sock.close()
@@ -47,7 +42,7 @@ class Server:
             # TODO: Modify the receive to avoid short-reads
             msg = client_sock.recv(1024).rstrip().decode('utf-8')
             addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+            logging.info(f'action: receive_client_sock_message | result: success | ip: {addr[0]} | msg: {msg}')
             # TODO: Modify the send to avoid short-writes
             client_sock.send("{}\n".format(msg).encode('utf-8'))
         except OSError as e:
@@ -65,9 +60,19 @@ class Server:
 
         # Connection arrived
         logging.info('action: accept_connections | result: in_progress')
-        c, addr = self._server_socket.accept()
+        try: 
+            c, addr = self._server_socket.accept()
+        except OSError as e:
+            if self._stop:
+                return None
+            else:
+                logging.error(f"action: accept_connections | result: fail | error: {e}")
+                return None
         logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
         return c
     
     def close(self):
-        self._server_socket.close()
+        self._stop = True
+        if self._server_socket:
+            self._server_socket.close() 
+        

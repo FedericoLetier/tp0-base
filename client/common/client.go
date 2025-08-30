@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"net"
 	"time"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/op/go-logging"
 )
@@ -27,6 +24,7 @@ type ClientConfig struct {
 type Client struct {
 	config ClientConfig
 	conn   net.Conn
+	keep_running bool
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -34,6 +32,7 @@ type Client struct {
 func NewClient(config ClientConfig) *Client {
 	client := &Client{
 		config: config,
+		keep_running: true
 	}
 	return client
 }
@@ -61,49 +60,51 @@ func (c *Client) StartClientLoop() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Capturar señales
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigs
-		cancel()
-	}()
 	
-	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
-		// Create the connection the server in every loop iteration. Send an
+	for msgID := 1; msgID <= c.config.LoopAmount && c.keep_running; msgID++ {
+		// Create the connection the server in every loop iteration. Send an		
+		c.createClientSocket()
+			
+		// TODO: Modify the send to avoid short-write
+		fmt.Fprintf(
+			c.conn,
+			"[CLIENT %v] Message N°%v\n",
+			c.config.ID,
+			msgID,
+		)
+		msg, err := bufio.NewReader(c.conn).ReadString('\n')
+		c.conn.Close()
+
+		if err != nil && c.keep_running {
+			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			return
+		}
+
+		if !c.keep_running {
+			continue
+		}
+		
+		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
+		c.config.ID, 
+		msg,
+		)
+	
+		// Wait a time between sending one message and the next one
+		time.Sleep(c.config.LoopPeriod)
 		select {
 		case <-ctx.Done():
-			return
-		default:
-			c.createClientSocket()
-			
-			// TODO: Modify the send to avoid short-write
-			fmt.Fprintf(
-				c.conn,
-				"[CLIENT %v] Message N°%v\n",
-				c.config.ID,
-				msgID,
-			)
-			msg, err := bufio.NewReader(c.conn).ReadString('\n')
-			c.conn.Close()
-
-			if err != nil {
-				log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-					c.config.ID,
-					err,
-				)
-				return
-			}
-		
-			log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID, 
-			msg,
-			)
-	
-			// Wait a time between sending one message and the next one
-			time.Sleep(c.config.LoopPeriod)
+    		return
+		case <-time.After(c.config.LoopPeriod):
 		}
 	}
 	c.conn.Close()
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
+}
+
+func (c *Client) Close() {
+	c.conn.Close()
+	c.keep_running = false
 }
