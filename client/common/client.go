@@ -93,7 +93,6 @@ func (c *Client) StartClientLoop() {
 		)
 	
 		// Wait a time between sending one message and the next one
-		time.Sleep(c.config.LoopPeriod)
 		select {
 		case <-ctx.Done():
     		return
