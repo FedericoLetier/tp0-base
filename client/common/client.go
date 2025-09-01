@@ -2,9 +2,6 @@ package common
 
 import (
 	"context"
-	"bufio"
-	"fmt"
-	"net"
 	"time"
 
 	"github.com/op/go-logging"
@@ -32,7 +29,7 @@ type ClientConfig struct {
 type Client struct {
 	config ClientConfig
 	bet Bet
-	conn   net.Conn
+	socket *ClientSocket
 	keep_running bool
 }
 
@@ -51,7 +48,8 @@ func NewClient(config ClientConfig, bet Bet) *Client {
 // failure, error is printed in stdout/stderr and exit 1
 // is returned
 func (c *Client) createClientSocket() error {
-	conn, err := net.Dial("tcp", c.config.ServerAddress)
+	socket, err := NewClientSocket(c.config.ServerAddress)
+	
 	if err != nil {
 		log.Criticalf(
 			"action: connect | result: fail | client_id: %v | error: %v",
@@ -60,29 +58,25 @@ func (c *Client) createClientSocket() error {
 		)
 		return err
 	}
-	c.conn = conn
+	c.socket = socket
 	return nil
 }
 
-func (c *Client) send_bet() error {
-	msg := fmt.Sprintf("%s,%s,%s,%s,%s,%s\n", "1", c.bet.Name, c.bet.Surname, c.bet.Document, c.bet.Birth, c.bet.Number)
-	data := []byte(msg)
-	total := 0
-	for total < len(data) {
-		n, err := c.conn.Write(data[total:])
-		if err != nil {
-			return err
-		}
-		total += n
+func (c *Client) sendBet() error {
+	err := c.socket.SendBet(c.bet)
+	if err != nil {
+		log.Errorf("action: send_message | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
 	}
-	return nil
+	return err
 }
 
-func (c *Client) receive_message() {
-	reader := bufio.NewReader(c.conn)
+func (c *Client) receiveMessage() {
+	msg, err := c.socket.ReceiveResponse()
 
-	msg, err := reader.ReadString('\n')
-	if err != nil && msg == "SUCCESS: Bet stored\n" {
+	if msg != "SUCCESS: Bet stored\n" {
 		if c.keep_running {
 			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
 				c.config.ID,
@@ -92,12 +86,8 @@ func (c *Client) receive_message() {
 		return
 	}
 
-	// Log de confirmación
 	log.Infof("action: apuesta_enviada | result: success | dni: %s | number: %s", 
 		c.bet.Document, c.bet.Number)
-
-	// Cerrar la conexión
-	c.conn.Close()
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met
@@ -107,8 +97,11 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 	for msgID := 1; msgID <= c.config.LoopAmount && c.keep_running; msgID++ {
 		// Create the connection the server in every loop iteration. Send an		
 		if c.createClientSocket() == nil {
-			c.send_bet()
-			c.receive_message()
+			err := c.sendBet()
+			if err != nil {
+				continue
+			}
+			c.receiveMessage()
 		}
 
 		if !c.keep_running {
@@ -127,6 +120,6 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 
 func (c *Client) Close() {
 	log.Infof("action: shutdown | result: success | info: Client shutdown completed")
-	c.conn.Close()
+	c.socket.Close()
 	c.keep_running = false
 }
