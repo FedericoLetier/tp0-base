@@ -128,7 +128,7 @@ func main() {
 		client.Close()
 	}()
 
-	err := client.StartClientLoop(BATCH_FILE)
+	err = client.StartClientLoop(BATCH_FILE)
 	log.Infof("Finishing program")
 	if err != nil {
 		os.Exit(EXIT_FAILURE_NUMBER)

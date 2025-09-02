@@ -45,15 +45,17 @@ type Client struct {
 	config ClientConfig
 	socket *ClientSocket
 	keep_running bool
-	previous_bet BetStored
+	previousBet BetStored
 }
 
 // NewClient Initializes a new client receiving the configuration
 // as a parameter
 func NewClient(config ClientConfig) *Client {
+	previousBet := BetStored{ sended: true, }
 	client := &Client{	
 		config: config,
 		keep_running: true,
+		previousBet: previousBet,
 	}
 	return client
 }
@@ -86,7 +88,7 @@ func (c *Client) receiveMessage(count int) error {
     	return err
 	}
 
-	if strings.Contains(msg, _SUCCESS_RESPONSE) {
+	if !strings.Contains(msg, _SUCCESS_RESPONSE) {
 	    err := fmt.Errorf("mensaje inesperado del server: %q", msg)
 	    log.Errorf("action: receive_message | result: fail | client_id: %v | error: unexpected msg: %v",
 	        c.config.ID,
@@ -99,9 +101,9 @@ func (c *Client) receiveMessage(count int) error {
 	return nil
 }
 
-func parseLineAndReturnBet(scanner *bufio.Scanner) (Bet, bool, int) {
+func (c *Client) parseLineAndReturnBet(scanner *bufio.Scanner) (Bet, bool, int) {
 	line := scanner.Text()
-	size_line = len(line)
+	lineSize := len(line)
     fields := strings.Split(line, CSV_SPLITTER)
     if len(fields) < 5 {
         log.Errorf("action: parse_csv | result: fail | error: invalid line: %v", line)
@@ -115,35 +117,48 @@ func parseLineAndReturnBet(scanner *bufio.Scanner) (Bet, bool, int) {
         Birth:    fields[3],
         Number:   fields[4],
     }
-	return bet, true, line_size
+	return bet, true, lineSize
+}
+
+func (c *Client) savePreviousBet(bet Bet, size_line int, bytesReaded int) bool {
+	if bytesReaded > MAX_SIZE_BATCH {
+		log.Debugf("Lines exceed 8kb, sending less bets this round")
+		c.previousBet.bet = bet
+		c.previousBet.size = size_line
+		c.previousBet.sended = false
+		return true
+	}
+	return false
+}
+
+func (c *Client) addPreviousBet() ([]Bet, int, int) {
+	bets := []Bet{}
+	count := 0
+	bytesReaded := 0
+	if !c.previousBet.sended {
+		bets = append(bets, c.previousBet.bet)
+		c.previousBet.sended = true
+		bytesReaded += c.previousBet.size
+		count++	
+	}
+	return bets, count, bytesReaded
 }
 
 func (c *Client) sendBatch(scanner *bufio.Scanner) (bool, int, error) {
-	bets := []Bet{}
-	count := 0
-	bytes_readed = 0
-	if !c.previous_bet.sended {
-		bets = append(bets, c.previous_bet.bet)
-		c.previous_bet.sended = true
-		bytes_readed += c.previous_bet.size
-		count++
-	}
-	keep_reading := false
+	bets, count, bytesReaded := c.addPreviousBet()
+	keepReading := false
 	for count < c.config.MaxAmount {
-		keep_reading = scanner.Scan()
-		if !keep_reading {
+		keepReading = scanner.Scan()
+		if !keepReading {
 			break
 		}
-        bet, valid, line_size := parseLineAndReturnBet(scanner)
+        bet, valid, lineSize := c.parseLineAndReturnBet(scanner)
 		if !valid {
 			continue
 		}
-		bytes_readed += line_size
-		if bytes_readed > MAX_SIZE_BATCH {
-			log.Debugf("Lines exceed 8kb, sending less bets this round")
-			c.previous_bet.bet = bet
-			c.previous_bet.size = size_line
-			c.previous_bet.sended = false
+		bytesReaded += lineSize
+		saved := c.savePreviousBet(bet, lineSize, bytesReaded)
+		if saved {
 			break
 		}
         bets = append(bets, bet)
@@ -157,9 +172,9 @@ func (c *Client) sendBatch(scanner *bufio.Scanner) (bool, int, error) {
 
 	if len(bets) > 0 {
 		err := c.socket.SendBatch(bets)
-    	return !keep_reading, count, err
+    	return !keepReading, count, err
 	}
-    return !keep_reading, 0, nil
+    return !keepReading, 0, nil
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met

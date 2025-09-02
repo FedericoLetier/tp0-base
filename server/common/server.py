@@ -15,7 +15,6 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self._stop = False
-        self._client_socket = None
 
     def run(self):
         """
@@ -27,24 +26,26 @@ class Server:
         """
 
         # the server
+        client_socket = None
         try:
             while not self._stop:
-                self.__accept_new_connection()
-                self.__handle_client_connection()
+                client_socket = self.__accept_new_connection()
+                self.__handle_client_connection(client_socket)
         except IOError as e:
             logging.error(f"Error using client socket | error: {e} | shutting down")
-        except e:
+        except Exception as e:
             logging.error(f"Uknown error | error: {e} | shutting down")
         finally:
             self.close()
+            client_socket.close()
 
-    def __store_and_send_response(self, bets, success):
+    def __store_and_send_response(self, bets, success, client_socket):
         store_bets(bets)
         bet_stored = len(bets)
         result = "success" if success else "fail"
         logging.debug(f"action: apuesta_recibida | result: {result} | cantidad: {bet_stored}")
         msg = "SUCCESS: Bet stored\n" if success else "ERROR: error storing bets\n"
-        if self._client_socket.send(msg) < 0:
+        if client_socket.send(msg) < 0:
             logging.error(f"action: enviar_respuesta | result: fail | short write, socket closed")
         
     def __parse_lines(self, msg):
@@ -54,7 +55,7 @@ class Server:
         for line in raw_bets:
             split_msg = line.split(self.BET_FIELDS_SPLITTER)
             if len(split_msg) != self.BET_FIELDS_SIZE:
-                logging.debug(f"action: parse_bet | result: fail | line: {line}")
+                logging.debug(f"action: parse_bet | result: fail | line: {raw_bets}")
                 logging.debug(f"action: parse_bet | result: fail | line: {raw_bets}")
                 success = False
                 break
@@ -62,31 +63,30 @@ class Server:
             bets.append(bet)    
         return bets, success
 
-    def __handle_client_connection(self):
+    def __handle_client_connection(self, client_socket):
         """
         Read message from a specific client socket and closes the socket
 
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
-        if not self._client_socket:
+        if not client_socket:
             return
         
         success = True
-        while not self._client_socket.finished():
+        while not client_socket.finished():
             try:
-                msg = self._client_socket.recv_all(self.BUFF_SIZE)
+                msg = client_socket.recv_all(self.BUFF_SIZE)
             except BlockingIOError:
                 continue
             except IOError as e:
                 success = False
-                
-            if not msg and self._client_socket.finished():
+            if not msg and client_socket.finished():
                 continue
 
             bets, success = self.__parse_lines(msg)
-            self.__store_and_send_response(bets, success)
-        self._client_socket = None
+            self.__store_and_send_response(bets, success, client_socket)
+        client_socket = None
             
 
     def __accept_new_connection(self):
@@ -108,13 +108,12 @@ class Server:
                 logging.error(f"action: accept_connections | result: fail | error: {e}")
                 return
         logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
-        self._client_socket = Socket(c)
+        return Socket(c)
     
     def close(self):
         self._stop = True
         if self._server_socket:
-            self._server_socket.close() 
-            self._client_socket.close()
+            self._server_socket.close()
             self._server_socket = None
             logging.info("action: shutdown | result: success | info: Server shutdown completed")
         
