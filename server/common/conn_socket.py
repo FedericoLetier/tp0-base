@@ -5,6 +5,7 @@ class Socket:
     def __init__(self, socket):
         self._socket = socket
         self._finished = False
+        self._closed = False
         
     def recv_all(self, bufsize: int) -> bytes:
         size_bytes = self._socket.recv(2)
@@ -38,4 +39,6 @@ class Socket:
         return self._finished
     
     def close(self):
-        self._socket.close()
+        if self._socket:
+            self._socket.close()
+            self._socket = None

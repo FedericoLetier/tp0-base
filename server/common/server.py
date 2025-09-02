@@ -6,6 +6,8 @@ from common.utils import Bet, store_bets
 class Server:
     BET_FIELDS_SIZE = 6
     BUFF_SIZE = 8192
+    BET_SPLITTER = "\n"
+    BET_FIELDS_SPLITTER = ","
 
     def __init__(self, port, listen_backlog):
         # Initialize server socket
@@ -13,6 +15,7 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self._stop = False
+        self._client_socket = None
 
     def run(self):
         """
@@ -24,31 +27,32 @@ class Server:
         """
 
         # the server
-        client_sock = None
-        while not self._stop:
-            client_sock = self.__accept_new_connection()
-            if client_sock:
-                self.__handle_client_connection(client_sock)
-        
-        if client_sock:
-            client_sock.close()
-        self.close()
+        try:
+            while not self._stop:
+                self.__accept_new_connection()
+                self.__handle_client_connection()
+        except IOError as e:
+            logging.error(f"Error using client socket | error: {e} | shutting down")
+        except e:
+            logging.error(f"Uknown error | error: {e} | shutting down")
+        finally:
+            self.close()
 
-    def __store_and_send_response(self, client_sock, bets, success):
+    def __store_and_send_response(self, bets, success):
         store_bets(bets)
         bet_stored = len(bets)
         result = "success" if success else "fail"
         logging.debug(f"action: apuesta_recibida | result: {result} | cantidad: {bet_stored}")
         msg = "SUCCESS: Bet stored\n" if success else "ERROR: error storing bets\n"
-        if client_sock.send(msg) < 0:
+        if self._client_socket.send(msg) < 0:
             logging.error(f"action: enviar_respuesta | result: fail | short write, socket closed")
         
     def __parse_lines(self, msg):
         success = True
         bets = []
-        raw_bets = msg.split('\n')
+        raw_bets = msg.split(self.BET_SPLITTER)
         for line in raw_bets:
-            split_msg = line.split(',')
+            split_msg = line.split(self.BET_FIELDS_SPLITTER)
             if len(split_msg) != self.BET_FIELDS_SIZE:
                 logging.debug(f"action: parse_bet | result: fail | line: {line}")
                 logging.debug(f"action: parse_bet | result: fail | line: {raw_bets}")
@@ -58,29 +62,32 @@ class Server:
             bets.append(bet)    
         return bets, success
 
-    def __handle_client_connection(self, client_sock):
+    def __handle_client_connection(self):
         """
         Read message from a specific client socket and closes the socket
 
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
+        if not self._client_socket:
+            return
+        
         success = True
-        while not client_sock.finished():
+        while not self._client_socket.finished():
             try:
-                msg = client_sock.recv_all(self.BUFF_SIZE)
+                msg = self._client_socket.recv_all(self.BUFF_SIZE)
             except BlockingIOError:
                 continue
             except IOError as e:
                 success = False
-                break
-            if not msg and client_sock.finished():
+                
+            if not msg and self._client_socket.finished():
                 continue
 
             bets, success = self.__parse_lines(msg)
-
-            self.__store_and_send_response(client_sock, bets, success)
-        client_sock.close()
+            self.__store_and_send_response(bets, success)
+        self._client_socket = None
+            
 
     def __accept_new_connection(self):
         """
@@ -99,14 +106,15 @@ class Server:
                 return 
             else:
                 logging.error(f"action: accept_connections | result: fail | error: {e}")
-                return None
+                return
         logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
-        return Socket(c)
+        self._client_socket = Socket(c)
     
     def close(self):
         self._stop = True
         if self._server_socket:
             self._server_socket.close() 
+            self._client_socket.close()
             self._server_socket = None
             logging.info("action: shutdown | result: success | info: Server shutdown completed")
         

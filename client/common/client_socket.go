@@ -8,6 +8,8 @@ import (
 	"encoding/binary"
 )
 
+const BET_SPLITTER = "\n"
+
 type ClientSocket struct {
 	conn   net.Conn
 	reader *bufio.Reader
@@ -36,9 +38,10 @@ func (cs *ClientSocket) sendAll(data []byte) error {
 
 func (cs *ClientSocket) SendBatch(bets []Bet) error {
 	var sb strings.Builder
+	size := 0
     for i, bet := range bets {
 		if i > 0 {
-        	sb.WriteString("\n")
+        	sb.WriteString(BET_SPLITTER)
     	}
         sb.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s",
             bet.AgencyID, bet.Name, bet.Surname, bet.Document, bet.Birth, bet.Number))
@@ -59,7 +62,7 @@ func (cs *ClientSocket) SendBatch(bets []Bet) error {
 
 
 func (cs *ClientSocket) ReceiveResponse() (string, error) {
-	msg, err := cs.reader.ReadString('\n')
+	msg, err := cs.reader.ReadString(BET_SPLITTER)
 	return msg, err
 }
 

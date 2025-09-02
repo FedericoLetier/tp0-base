@@ -15,6 +15,9 @@ import (
 	"github.com/7574-sistemas-distribuidos/docker-compose-init/client/common"
 )
 
+const BATCH_FILE = "/.data/agency.csv"
+const EXIT_FAILURE_NUMBER = 1
+
 var log = logging.MustGetLogger("log")
 
 // InitConfig Function that uses viper library to parse configuration parameters.
@@ -125,7 +128,9 @@ func main() {
 		client.Close()
 	}()
 
-	client.StartClientLoop("/.data/agency.csv")
-	log.Infof("Saliendo del prog")
-	os.Exit(0)
+	err := client.StartClientLoop(BATCH_FILE)
+	log.Infof("Finishing program")
+	if err != nil {
+		os.Exit(EXIT_FAILURE_NUMBER)
+	}
 }
