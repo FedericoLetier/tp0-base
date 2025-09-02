@@ -233,7 +233,7 @@ func (c *Client) StartClientLoop(filename string) error {
     for c.keep_running {
 		finished, count, err := c.sendBatch(scanner)
         if err != nil || count == 0 {
-            return err
+            break
         }
 		log.Debugf("action: waiting_response | ammount_sent: %v", count)
 		
