@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"strings"
 	"fmt"
+	"strconv"
 
 	"github.com/op/go-logging"
 )
@@ -177,6 +178,45 @@ func (c *Client) sendBatch(scanner *bufio.Scanner) (bool, int, error) {
     return !keepReading, 0, nil
 }
 
+func convertIDToUint8(id string) (uint8, error) {
+	idInt, err := strconv.Atoi(id)
+	if err != nil {
+	    return 0, fmt.Errorf("invalid agency id: %v", err)
+	}
+	if idInt < 0 || idInt > 255 {
+	    return 0, fmt.Errorf("agency id out of range: %d", idInt)
+	}
+	return uint8(idInt), nil
+}
+
+func (c *Client) askForWinners() error {
+	id, err := convertIDToUint8(c.config.ID)
+	if err != nil {
+		log.Errorf("action: parse_id | result: fail | error: %v", err)
+		return err
+	}
+	agencyBuf := []byte{id}
+	err = c.socket.SendAll(agencyBuf, 2)
+	if err != nil {
+		log.Errorf("action: consulta_ganadores | result: fail | error: %v", err)
+		return err
+	}
+	log.Debugf("action: waiting_for_winners | result: success")
+
+	msg, err := c.socket.ReceiveResponse()
+	if err != nil {
+		log.Errorf("action: consulta_ganadores | result: fail | error: %v", err)
+		return err
+	}
+	winersDNI := strings.Split(msg, CSV_SPLITTER)
+	winnersCount := 0
+	if msg != "\n" {
+		winnersCount = len(winersDNI)
+	}
+	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %v", winnersCount)
+	return nil
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop(filename string) error {
     file, err := os.Open(filename)
@@ -203,9 +243,12 @@ func (c *Client) StartClientLoop(filename string) error {
 			break
 		}
     }
-	log.Debugf("Loop finished")
+	log.Infof("Batch finished")
+
+	err = c.askForWinners()
+
 	c.Close()
-    return nil
+    return err
 }
 
 func (c *Client) Close() {

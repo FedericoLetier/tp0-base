@@ -25,11 +25,13 @@ func NewClientSocket(address string) (*ClientSocket, error) {
 	return &ClientSocket{conn : conn, reader : bufio.NewReader(conn)}, nil
 }
 
-func (cs *ClientSocket) sendAll(data []byte) error {
+func (cs *ClientSocket) SendAll(data []byte, opCode uint8) error {
+	opCodeBuf := []byte{opCode}
+	packet := append(opCodeBuf, data...)
 	total := 0
-	size := len(data)
+	size := len(packet)
     for total < size {
-        n, err := cs.conn.Write(data[total:])
+        n, err := cs.conn.Write(packet[total:])
         if err != nil {
             return err
         }
@@ -55,8 +57,8 @@ func (cs *ClientSocket) SendBatch(bets []Bet) error {
 
     size := make([]byte, 2)
     binary.BigEndian.PutUint16(size, uint16(len(data)))
-	log.Infof("action: send_batch | result: in_progress | size: %s bytes", data)
-	err := cs.sendAll(append(size, data...))
+	log.Debugf("action: send_batch | result: in_progress | size: %d bytes", len(data))
+	err := cs.SendAll(append(size, data...), 1)
     return err
 }
 

@@ -1,9 +1,10 @@
 import socket
 import logging
 from common.conn_socket import Socket
-from common.utils import Bet, store_bets
+from common.utils import Bet, store_bets, load_bets, has_won
 
 class Server:
+    TOTAL_AGENCYS = 5
     BET_FIELDS_SIZE = 6
     BUFF_SIZE = 8192
     BET_SPLITTER = "\n"
@@ -14,6 +15,7 @@ class Server:
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+        self._waiting_winners = []
         self._stop = False
 
     def run(self):
@@ -31,6 +33,11 @@ class Server:
             while not self._stop:
                 client_socket = self.__accept_new_connection()
                 self.__handle_client_connection(client_socket)
+                logging.debug(f"Cliente manejado, vamos {len(self._waiting_winners)}")
+
+                if len(self._waiting_winners) == self.TOTAL_AGENCYS:
+                    self.__send_winners()
+                    break
         except IOError as e:
             logging.error(f"Error using client socket | error: {e} | shutting down")
         except Exception as e:
@@ -38,6 +45,27 @@ class Server:
         finally:
             self.close()
             client_socket.close()
+
+    def __send_winners(self):
+        logging.info("action: sorteo | result: success")
+        bets = load_bets()
+        winners = {}
+        for bet in bets:
+            if not has_won(bet):
+                continue
+            if not bet.agency in winners:
+                winners[bet.agency] = []
+            winners[bet.agency].append(bet.document)
+        for agency, socket in self._waiting_winners:
+            if agency not in winners:
+                logging.debug(f"agency {agency} has no winners")
+                socket.send("\n")
+                continue
+            logging.debug(f"winners sent to agency: {agency}")
+            agency_winners = winners[agency]
+            msg = agency_winners.join(self.BET_FIELDS_SPLITTER)
+            msg.append(self.BET_SPLITTER)
+            socket.send(msg)
 
     def __store_and_send_response(self, bets, success, client_socket):
         store_bets(bets)
@@ -76,7 +104,7 @@ class Server:
         success = True
         while not client_socket.finished():
             try:
-                msg = client_socket.recv_all(self.BUFF_SIZE)
+                op_code, msg = client_socket.recv_all(self.BUFF_SIZE)
             except BlockingIOError:
                 continue
             except IOError as e:
@@ -84,10 +112,15 @@ class Server:
             if not msg and client_socket.finished():
                 continue
 
-            bets, success = self.__parse_lines(msg)
-            self.__store_and_send_response(bets, success, client_socket)
+            if op_code == 1:
+                bets, success = self.__parse_lines(msg)
+                self.__store_and_send_response(bets, success, client_socket)
+            else:
+                self._waiting_winners.append((msg, client_socket))
+                logging.debug(f"Agency waiting for winner: {msg}")
+                break
+
         client_socket = None
-            
 
     def __accept_new_connection(self):
         """
@@ -113,6 +146,8 @@ class Server:
     def close(self):
         self._stop = True
         if self._server_socket:
+            for _, socket in self._waiting_winners:
+                socket.close()
             self._server_socket.close()
             self._server_socket = None
             logging.info("action: shutdown | result: success | info: Server shutdown completed")
