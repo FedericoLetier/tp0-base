@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
     "syscall"
-	"context"
 	"strings"
 	"time"
 
@@ -40,6 +39,7 @@ func InitConfig() (*viper.Viper, error) {
 	v.BindEnv("loop", "period")
 	v.BindEnv("loop", "amount")
 	v.BindEnv("log", "level")
+	v.BindEnv("batch", "maxAmount")
 
 	// Try to read configuration from config file. If config file
 	// does not exists then ReadInConfig will fail but configuration
@@ -84,34 +84,14 @@ func InitLogger(logLevel string) error {
 // PrintConfig Print all the configuration parameters of the program.
 // For debugging purposes only
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: success | client_id: %s | server_address: %s | loop_amount: %v | loop_period: %v | log_level: %s",
+	log.Infof("action: config | result: success | client_id: %s | server_address: %s | loop_amount: %v | loop_period: %v | log_level: %s | batch_maxAmount: %v",
 		v.GetString("id"),
 		v.GetString("server.address"),
 		v.GetInt("loop.amount"),
 		v.GetDuration("loop.period"),
 		v.GetString("log.level"),
+		v.GetInt("batch.maxAmount"),
 	)
-}
-
-func get_env_vars() common.Bet {
-	name := os.Getenv("NOMBRE")
-	surname := os.Getenv("APELLIDO")
-	document := os.Getenv("DOCUMENTO")
-	birth := os.Getenv("NACIMIENTO")
-	number := os.Getenv("NUMERO")
-
-	if name == "" || surname == "" || document == "" || birth == "" || number == "" {
-		log.Errorf("Faltan variables de entorno necesarias (NOMBRE, APELLIDO, DOCUMENTO, NACIMIENTO, NUMERO)")
-		return common.Bet{}
-	}
-
-	return common.Bet{
-		Name:      name,
-		Surname:   surname,
-		Document:  document,
-		Birth:     birth,
-		Number:    number,
-	}
 }
 
 func main() {
@@ -132,23 +112,20 @@ func main() {
 		ID:            v.GetString("id"),
 		LoopAmount:    v.GetInt("loop.amount"),
 		LoopPeriod:    v.GetDuration("loop.period"),
+		MaxAmount: 	   v.GetInt("batch.maxAmount"),
 	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	ctx, cancel := context.WithCancel(context.Background())
-	bet := get_env_vars()
-	if bet.Name == "" || bet.Surname == "" || bet.Document == "" || bet.Birth == "" || bet.Number == "" {
-    	os.Exit(1)
-	}
 	
-	client := common.NewClient(clientConfig, bet)
+	client := common.NewClient(clientConfig)
 
 	go func() {
 		<-sigs
-		cancel()
 		client.Close()
 	}()
 
-	client.StartClientLoop(ctx)
+	client.StartClientLoop("/.data/agency.csv")
+	log.Infof("Saliendo del prog")
+	os.Exit(0)
 }

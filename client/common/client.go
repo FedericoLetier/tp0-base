@@ -1,13 +1,17 @@
 package common
 
 import (
-	"context"
 	"time"
+	"os"
+	"bufio"
+	"strings"
+	"fmt"
 
 	"github.com/op/go-logging"
 )
 
 type Bet struct {
+	AgencyID string
     Name    string
     Surname  string
     Document string
@@ -23,6 +27,7 @@ type ClientConfig struct {
 	ServerAddress string
 	LoopAmount    int
 	LoopPeriod    time.Duration
+	MaxAmount	  int
 }
 
 // Client Entity that encapsulates how
@@ -35,10 +40,9 @@ type Client struct {
 
 // NewClient Initializes a new client receiving the configuration
 // as a parameter
-func NewClient(config ClientConfig, bet Bet) *Client {
+func NewClient(config ClientConfig) *Client {
 	client := &Client{	
 		config: config,
-		bet: bet,
 		keep_running: true,
 	}
 	return client
@@ -62,63 +66,105 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
-func (c *Client) sendBet() error {
-	err := c.socket.SendBet(c.bet)
-	if err != nil {
-		log.Errorf("action: send_message | result: fail | client_id: %v | error: %v",
-				c.config.ID,
-				err,
-			)
-	}
-	return err
-}
-
-func (c *Client) receiveMessage() {
+func (c *Client) receiveMessage(count int) error {
 	msg, err := c.socket.ReceiveResponse()
+	if err != nil {
+    	log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+    	    c.config.ID,
+    	    err,
+    	)
+    	return err
+	}
 
 	if msg != "SUCCESS: Bet stored\n" {
-		if c.keep_running {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-				c.config.ID,
-				err,
-			)
-		}
-		return
+	    err := fmt.Errorf("mensaje inesperado del server: %q", msg)
+	    log.Errorf("action: receive_message | result: fail | client_id: %v | error: unexpected msg: %v",
+	        c.config.ID,
+	        err,
+	    )
+	    return err
 	}
 
-	log.Infof("action: apuesta_enviada | result: success | dni: %s | number: %s", 
-		c.bet.Document, c.bet.Number)
+	log.Infof("action: apuesta_enviada | result: success | cantidad: %v", count)
+	return nil
+}
+
+func (c *Client) sendBatch(scanner *bufio.Scanner) (bool, int, error) {
+	bets := []Bet{}
+	count := 0
+	keep_reading := false
+	for count < c.config.MaxAmount {
+		keep_reading = scanner.Scan()
+		if !keep_reading {
+			break
+		}
+        line := scanner.Text()
+        fields := strings.Split(line, ",")
+        if len(fields) < 5 {
+            log.Errorf("action: parse_csv | result: fail | error: línea inválida: %v", line)
+            continue
+        }
+        bet := Bet{
+            AgencyID: c.config.ID,
+            Name:     fields[0],
+            Surname:  fields[1],
+            Document: fields[2],
+            Birth:    fields[3],
+            Number:   fields[4],
+        }
+
+        bets = append(bets, bet)
+        count++
+    }
+
+    if err := scanner.Err(); err != nil {
+		log.Errorf("action: read_file | ressult: fail | error: %v", err)
+        return true, 0, err
+    }
+
+	if len(bets) > 0 {
+		err := c.socket.SendBatch(bets)
+    	return !keep_reading, count, err
+	}
+    return !keep_reading, 0, nil
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met
-func (c *Client) StartClientLoop(ctx context.Context) {
-	// There is an autoincremental msgID to identify every message sent
-	// Messages if the message amount threshold has not been surpassed	
-	for msgID := 1; msgID <= c.config.LoopAmount && c.keep_running; msgID++ {
-		// Create the connection the server in every loop iteration. Send an		
-		if c.createClientSocket() == nil {
-			err := c.sendBet()
-			if err != nil {
-				continue
-			}
-			c.receiveMessage()
-		}
+func (c *Client) StartClientLoop(filename string) error {
+    file, err := os.Open(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
 
-		if !c.keep_running {
-			continue
+	err = c.createClientSocket()
+	if err != nil {
+        return err
+    }
+	scanner := bufio.NewScanner(file)
+    for c.keep_running {
+		finished, count, err := c.sendBatch(scanner)
+        if err != nil {
+            return err
+        }
+		log.Infof("action: esperando_respuesta | result: success | cantidad: %v", count)
+		
+		if count > 0 {
+			err = c.receiveMessage(count)
 		}
-	
-		// Wait a time between sending one message and the next on: receione
-		select {
-		case <-ctx.Done():
-    		return
-		case <-time.After(c.config.LoopPeriod):
+		if err != nil || finished {
+			break
 		}
-	}
-	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
+    }
+	log.Infof("loop terminado")
+	c.Close()
+    return nil
 }
 
 func (c *Client) Close() {
+	if !c.keep_running {
+		return
+	}
 	log.Infof("action: shutdown | result: success | info: Client shutdown completed")
 	c.socket.Close()
 	c.keep_running = false
