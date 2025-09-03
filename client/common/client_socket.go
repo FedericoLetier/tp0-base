@@ -19,6 +19,8 @@ type ClientSocket struct {
 	reader *bufio.Reader
 }
 
+const BET_SPLITTER = '\n'
+
 func NewClientSocket(address string) (*ClientSocket, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
