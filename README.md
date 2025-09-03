@@ -186,3 +186,14 @@ Se definio el script `generar-compose.sh` que ejecuta un programa en python para
 
 `./generar-compose.sh docker-compose-dev.yaml 5`
 
+### Ejercicio 2
+Para resolverlo, simplemente se agrego la siguiente linea al script de la parte 1.
+```python
+    """
+    volumes:
+      - ./client/config.yaml:/config.yaml:ro
+    """
+```
+Y lo mismo para el servidor. 
+
+De esta forma no hace falta reconstruir la imagen para cambiar la config.
