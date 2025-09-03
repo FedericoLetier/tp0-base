@@ -126,8 +126,6 @@ class Server:
         except IOError as e:
             if not self._stop:
                 logging.error(f"Error using client socket | error: {e} | shutting down")
-        finally:
-            client_socket.close()
         
     def __accept_new_connection(self):
         """

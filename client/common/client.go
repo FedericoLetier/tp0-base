@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"strings"
 	"fmt"
-	"strconv"
 
 	"github.com/op/go-logging"
 )
@@ -179,7 +178,7 @@ func (c *Client) sendBatch(scanner *bufio.Scanner) (bool, int, error) {
 }
 
 func (c *Client) askForWinners() error {
-	err := cs.SendWinnerRequest(c.config.ID) 
+	err := c.socket.SendWinnerRequest(c.config.ID) 
 	if err != nil {
 		log.Errorf("action: consulta_ganadores | result: fail | error: %v", err)
 		return err

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"bufio"
 	"strings"
+	"strconv"
 	"encoding/binary"
 )
 
@@ -53,7 +54,7 @@ func convertIDToUint8(id string) (uint8, error) {
 	return uint8(idInt), nil
 }
 
-func (cs *ClientSocket) SendWinnerRequest(agencyNumber int) error {
+func (cs *ClientSocket) SendWinnerRequest(agencyNumber string) error {
 	id, err := convertIDToUint8(agencyNumber)
 	if err != nil {
 		log.Errorf("action: parse_id | result: fail | error: %v", err)
@@ -61,7 +62,7 @@ func (cs *ClientSocket) SendWinnerRequest(agencyNumber int) error {
 	}
 	log.Debugf("action: sending_winners_request | result: waiting")
 	agencyBuf := []byte{id}
-	err = c.socket.sendAll(agencyBuf, WINNERS_OP_CODE)
+	err = cs.sendAll(agencyBuf, WINNERS_OP_CODE)
 	if err != nil {
 		log.Errorf("action: consulta_ganadores | result: fail | error: %v", err)
 		return err
