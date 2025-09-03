@@ -121,9 +121,6 @@ class Server:
                 logging.error(f"Invalid op_code: {op_code}")
                 break
 
-
-        client_socket = None
-
     def __accept_new_connection(self):
         """
         Accept new connections
