@@ -57,7 +57,7 @@ class Server:
         for agency, socket in self._waiting_winners:
             if agency not in winners:
                 logging.debug(f"agency {agency} has no winners")
-                socket.send("\n")
+                socket.send(self.BET_SPLITTER)
                 continue
             logging.debug(f"winners sent to agency: {agency}")
             agency_winners = winners[agency]
@@ -89,16 +89,7 @@ class Server:
             bets.append(bet)    
         return bets, success
 
-    def __handle_client_connection(self, client_socket):
-        """
-        Read message from a specific client socket and closes the socket
-
-        If a problem arises in the communication with the client, the
-        client socket will also be closed
-        """
-        if not client_socket:
-            return
-        
+    def __client_connection_loop(self, client_socket):
         success = True
         while not client_socket.finished():
             try:
@@ -121,6 +112,23 @@ class Server:
                 logging.error(f"Invalid op_code: {op_code}")
                 break
 
+    def __handle_client_connection(self, client_socket):
+        """
+        Read message from a specific client socket and closes the socket
+
+        If a problem arises in the communication with the client, the
+        client socket will also be closed
+        """
+        if not client_socket:
+            return
+        try:
+            self.__client_connection_loop(client_socket)
+        except IOError as e:
+            if not self._stop:
+                logging.error(f"Error using client socket | error: {e} | shutting down")
+        finally:
+            client_socket.close()
+        
     def __accept_new_connection(self):
         """
         Accept new connections
