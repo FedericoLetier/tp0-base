@@ -178,3 +178,141 @@ Se espera que se redacte una sección del README en donde se indique cómo ejecu
 Se proveen [pruebas automáticas](https://github.com/7574-sistemas-distribuidos/tp0-tests) de caja negra. Se exige que la resolución de los ejercicios pase tales pruebas, o en su defecto que las discrepancias sean justificadas y discutidas con los docentes antes del día de la entrega. El incumplimiento de las pruebas es condición de desaprobación, pero su cumplimiento no es suficiente para la aprobación. Respetar las entradas de log planteadas en los ejercicios, pues son las que se chequean en cada uno de los tests.
 
 La corrección personal tendrá en cuenta la calidad del código entregado y casos de error posibles, se manifiesten o no durante la ejecución del trabajo práctico. Se pide a los alumnos leer atentamente y **tener en cuenta** los criterios de corrección informados  [en el campus](https://campusgrado.fi.uba.ar/mod/page/view.php?id=73393).
+
+## Explicación de desarrollo
+
+### Ejercicio 1
+Se definio el script `generar-compose.sh` que ejecuta un programa en python para escirbir el docker compose. Se ejecuta como es pedido:
+
+`./generar-compose.sh docker-compose-dev.yaml 5`
+
+### Ejercicio 2
+Para resolverlo, simplemente se agrego la siguiente linea al script de la parte 1.
+```python
+    """
+    volumes:
+      - ./client/config.yaml:/config.yaml:ro
+    """
+```
+Y lo mismo para el servidor. 
+
+De esta forma no hace falta reconstruir la imagen para cambiar la config.
+
+### Ejercicio 3
+Para verificar la conexión del servidor solamente hay que ejecutar `./validar-echo-server.sh`. Este intenta mandar con netcat un mensaje al servidor, que utiliza `server` para la ip y una variable definida dentro que toma el puerto del archivo de configuración (para no harcodear). Usa un container temporal que se remueve automaticamente al finalizar.
+
+```bash
+RESPONSE=$(timeout 5 docker run --rm --network=tp0_testing_net alpine sh -c "\
+  apk add --no-cache netcat-openbsd && \
+  echo 'ping' | nc -w 2 server $SERVER_PORT" | tail -n 1)
+```
+### Ejercicio 4
+Tanto en el cliente como en el servidor se resolvio de una forma muy similar. En el main establezco una funcion que se llama cuando llegue un `SIGTERM`.
+
+En el servidor
+```python
+def handle_sigterm(signum, frame):
+        logging.info("action: shutdown | result: success | info: Caught SIGTERM, shutting down")
+        server.close()
+    signal.signal(signal.SIGTERM, handle_sigterm)
+```
+
+El server define como hacer el cierre
+```
+ def close(self):
+    self._stop = True
+    if self._server_socket:
+        self._server_socket.close() 
+        logging.info("action: shutdown | result: success | info: Server shutdown completed")
+```
+Cerrando el socket de aceptación y cambiando un booleano que frena el loop principal.
+
+El cliente por su parte hace algo similar
+```go
+sigs := make(chan os.Signal, 1)
+signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+ctx, cancel := context.WithCancel(context.Background())	
+go func() {
+	<-sigs
+	cancel()
+	client.Close()
+}()
+```
+Cuando se cierra el cliente se cierra el socket de comunicación y se pone un booleano en falso para que no siga iterando.
+
+### Ejercicio 5
+Para poder establecer los parametros de la apuesta (Nombre, apellido, etc.) los setee como variable de entorno que se configuran en el docker compose. De esta forma el cliente tiene acceso a los datos facilmente. 
+
+El protocolo es muy sencillo:
+`NOMBRE,APELLIDO,DOCUMENTO,NACIMIENTO,NUMERO\n`
+
+Como cada comunicación entre cliente y servidor es solo de a una apuesta. El servidor va a intentar leer todo hasta que le llegue un `\n` final. Luego los campos los separa por comas. 
+
+La respuesta del servidor también es muy simple:
+`SUCCESS: mensaje de success\n`
+o
+`ERROR: mensaje de eror\n`
+Por lo tanto, el cliente va a leer hasta el `\n` tambien y debe  verificar que el mensaje diga `SUCCESS`.
+
+#### Para evitar short read y write.
+##### Short read
+En el server
+```python
+def recv(self, bufsize: int) -> bytes:
+        msg = ''
+        while not msg.endswith('\n'):
+            try: 
+                chunk = self._socket.recv(bufsize)
+            except BlockingIOError:
+                continue
+            except IOError as e:
+                return None
+            if not chunk:
+                break
+            msg += chunk.decode('utf-8')
+        
+        return msg
+```
+
+En el cliente:
+Aca no tengo que iterar porque la libreria estandar me asegura que un reader de bufio si le pido que lea hasta `\n` no va a devolver el mensaje hasta que lo haga.
+```go
+func (cs *ClientSocket) ReceiveResponse() (string, error) {
+	reader := bufio.NewReader(cs.conn)
+	
+	msg, err := reader.ReadString('\n')
+	if err != nil && msg != "SUCCESS: Bet stored\n" {
+		return "", err
+	}
+
+	cs.conn.Close()
+	return msg, err
+}
+```
+
+##### Short write
+En el server:
+Pasa algo similar a go para recibir, hay una funcion que te asegura mandar todo el arreglo de bytes.
+```python
+self._socket.sendall(msg.encode('utf-8'))
+```
+
+En el cliente:
+
+```go
+func (cs *ClientSocket) SendBet(bet Bet) error {
+	msg := fmt.Sprintf("%s,%s,%s,%s,%s,%s\n", "1", bet.Name, bet.Surname, bet.Document, bet.Birth, bet.Number)
+	data := []byte(msg)
+	total := 0
+	for total < len(data) {
+		n, err := cs.conn.Write(data[total:])
+		if err != nil {
+			return err
+		}
+		total += n
+	}
+	return nil
+}
+```
+Esto es mas similar a lo que pasa en el read del servidor.
+Escribo, verifico cuanto escribi y modifico la variable temporal. Hasta que lo que llevo escrito no iguale el tamaño no paro de escirbir.

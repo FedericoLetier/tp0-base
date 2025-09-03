@@ -10,6 +10,8 @@ type ClientSocket struct {
 	conn   net.Conn
 }
 
+const BET_SPLITTER = '\n'
+
 func NewClientSocket(address string) (*ClientSocket, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
@@ -35,7 +37,7 @@ func (cs *ClientSocket) SendBet(bet Bet) error {
 func (cs *ClientSocket) ReceiveResponse() (string, error) {
 	reader := bufio.NewReader(cs.conn)
 	
-	msg, err := reader.ReadString('\n')
+	msg, err := reader.ReadString(BET_SPLITTER)
 	if err != nil && msg != "SUCCESS: Bet stored\n" {
 		return "", err
 	}
