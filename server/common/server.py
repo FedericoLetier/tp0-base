@@ -4,7 +4,6 @@ from common.conn_socket import Socket
 from common.utils import Bet, store_bets, load_bets, has_won
 
 class Server:
-    TOTAL_AGENCYS = 5
     BET_FIELDS_SIZE = 6
     BUFF_SIZE = 8192
     BET_SPLITTER = "\n"
@@ -18,7 +17,7 @@ class Server:
         self._waiting_winners = []
         self._stop = False
 
-    def run(self):
+    def run(self, total_agencys):
         """
         Dummy Server loop
 
@@ -35,7 +34,7 @@ class Server:
                 self.__handle_client_connection(client_socket)
                 logging.debug(f"Cliente manejado, vamos {len(self._waiting_winners)}")
 
-                if len(self._waiting_winners) == self.TOTAL_AGENCYS:
+                if len(self._waiting_winners) == total_agencys:
                     self.__send_winners()
                     break
         except IOError as e:
@@ -44,7 +43,8 @@ class Server:
             logging.error(f"Uknown error | error: {e} | shutting down")
         finally:
             self.close()
-            client_socket.close()
+            if client_socket:
+                client_socket.close()
 
     def __send_winners(self):
         logging.info("action: sorteo | result: success")
@@ -63,8 +63,8 @@ class Server:
                 continue
             logging.debug(f"winners sent to agency: {agency}")
             agency_winners = winners[agency]
-            msg = agency_winners.join(self.BET_FIELDS_SPLITTER)
-            msg.append(self.BET_SPLITTER)
+            msg = self.BET_FIELDS_SPLITTER.join(agency_winners)
+            msg += self.BET_SPLITTER
             socket.send(msg)
 
     def __store_and_send_response(self, bets, success, client_socket):

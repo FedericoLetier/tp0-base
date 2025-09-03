@@ -1,7 +1,7 @@
 import sys
 
 def generar_yaml_compose(nombre_archivo, cantidad_clientes):
-    contenido = """name: tp0
+    contenido = f"""name: tp0
 services:
   server:
     container_name: server
@@ -11,6 +11,7 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
+      - TOTAL_AGENCYS={cantidad_clientes}
     networks:
       - testing_net
       

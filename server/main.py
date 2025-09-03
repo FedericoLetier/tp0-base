@@ -6,6 +6,8 @@ import logging
 import os
 import signal
 
+TOTAL_AGENCYS_ENV = 'TOTAL_AGENCYS'
+
 def initialize_config():
     """ Parse env variables or config file to find program config params
 
@@ -53,8 +55,8 @@ def main():
         logging.info("action: shutdown | result: success | info: Caught SIGTERM, shutting down")
         server.close()
     signal.signal(signal.SIGTERM, handle_sigterm)
-
-    server.run()
+    total_agencys = int(os.getenv(TOTAL_AGENCYS_ENV))
+    server.run(total_agencys)
 
 def initialize_log(logging_level):
     """

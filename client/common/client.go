@@ -195,6 +195,7 @@ func (c *Client) askForWinners() error {
 		log.Errorf("action: parse_id | result: fail | error: %v", err)
 		return err
 	}
+	log.Debugf("action: sending_winners_request | result: waiting")
 	agencyBuf := []byte{id}
 	err = c.socket.SendAll(agencyBuf, 2)
 	if err != nil {
