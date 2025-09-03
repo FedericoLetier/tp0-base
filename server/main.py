@@ -49,14 +49,14 @@ def main():
                   f"listen_backlog: {listen_backlog} | logging_level: {logging_level}")
 
     # Initialize server and start server loop
-    server = Server(port, listen_backlog)
+    total_agencys = int(os.getenv(TOTAL_AGENCYS_ENV))
+    server = Server(port, listen_backlog, total_agencys)
     
     def handle_sigterm(signum, frame):
         logging.info("action: shutdown | result: success | info: Caught SIGTERM, shutting down")
         server.close()
     signal.signal(signal.SIGTERM, handle_sigterm)
-    total_agencys = int(os.getenv(TOTAL_AGENCYS_ENV))
-    server.run(total_agencys)
+    server.run()
 
 def initialize_log(logging_level):
     """
