@@ -10,6 +10,8 @@ import (
 
 const BET_SPLITTER_BYTE = '\n'
 const BET_SPLITTER_STR = "\n"
+const BATCH_OP_CODE = 1
+const WINNERS_OP_CODE = 2
 
 type ClientSocket struct {
 	conn   net.Conn
@@ -25,7 +27,7 @@ func NewClientSocket(address string) (*ClientSocket, error) {
 	return &ClientSocket{conn : conn, reader : bufio.NewReader(conn)}, nil
 }
 
-func (cs *ClientSocket) SendAll(data []byte, opCode uint8) error {
+func (cs *ClientSocket) sendAll(data []byte, opCode uint8) error {
 	opCodeBuf := []byte{opCode}
 	packet := append(opCodeBuf, data...)
 	total := 0
@@ -38,6 +40,34 @@ func (cs *ClientSocket) SendAll(data []byte, opCode uint8) error {
         total += n
     }
     return nil
+}
+
+func convertIDToUint8(id string) (uint8, error) {
+	idInt, err := strconv.Atoi(id)
+	if err != nil {
+	    return 0, fmt.Errorf("invalid agency id: %v", err)
+	}
+	if idInt < 0 || idInt > 255 {
+	    return 0, fmt.Errorf("agency id out of range: %d", idInt)
+	}
+	return uint8(idInt), nil
+}
+
+func (cs *ClientSocket) SendWinnerRequest(agencyNumber int) error {
+	id, err := convertIDToUint8(agencyNumber)
+	if err != nil {
+		log.Errorf("action: parse_id | result: fail | error: %v", err)
+		return err
+	}
+	log.Debugf("action: sending_winners_request | result: waiting")
+	agencyBuf := []byte{id}
+	err = c.socket.sendAll(agencyBuf, WINNERS_OP_CODE)
+	if err != nil {
+		log.Errorf("action: consulta_ganadores | result: fail | error: %v", err)
+		return err
+	}
+	log.Debugf("action: waiting_for_winners | result: success")
+	return nil
 }
 
 func (cs *ClientSocket) SendBatch(bets []Bet) error {
@@ -58,7 +88,7 @@ func (cs *ClientSocket) SendBatch(bets []Bet) error {
     size := make([]byte, 2)
     binary.BigEndian.PutUint16(size, uint16(len(data)))
 	log.Debugf("action: send_batch | result: in_progress | size: %d bytes", len(data))
-	err := cs.SendAll(append(size, data...), 1)
+	err := cs.sendAll(append(size, data...), BATCH_OP_CODE)
     return err
 }
 

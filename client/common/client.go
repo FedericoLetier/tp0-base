@@ -79,7 +79,7 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
-func (c *Client) receiveMessage(count int) error {
+func (c *Client) receiveBatchResponseMessage(count int) error {
 	msg, err := c.socket.ReceiveResponse()
 	if err != nil {
     	log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
@@ -178,32 +178,12 @@ func (c *Client) sendBatch(scanner *bufio.Scanner) (bool, int, error) {
     return !keepReading, 0, nil
 }
 
-func convertIDToUint8(id string) (uint8, error) {
-	idInt, err := strconv.Atoi(id)
-	if err != nil {
-	    return 0, fmt.Errorf("invalid agency id: %v", err)
-	}
-	if idInt < 0 || idInt > 255 {
-	    return 0, fmt.Errorf("agency id out of range: %d", idInt)
-	}
-	return uint8(idInt), nil
-}
-
 func (c *Client) askForWinners() error {
-	id, err := convertIDToUint8(c.config.ID)
-	if err != nil {
-		log.Errorf("action: parse_id | result: fail | error: %v", err)
-		return err
-	}
-	log.Debugf("action: sending_winners_request | result: waiting")
-	agencyBuf := []byte{id}
-	err = c.socket.SendAll(agencyBuf, 2)
+	err := cs.SendWinnerRequest(c.config.ID) 
 	if err != nil {
 		log.Errorf("action: consulta_ganadores | result: fail | error: %v", err)
 		return err
 	}
-	log.Debugf("action: waiting_for_winners | result: success")
-
 	msg, err := c.socket.ReceiveResponse()
 	if err != nil {
 		log.Errorf("action: consulta_ganadores | result: fail | error: %v", err)
@@ -211,7 +191,7 @@ func (c *Client) askForWinners() error {
 	}
 	winersDNI := strings.Split(msg, CSV_SPLITTER)
 	winnersCount := 0
-	if msg != "\n" {
+	if msg != BET_SPLITTER_STR {
 		winnersCount = len(winersDNI)
 	}
 	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %v", winnersCount)
@@ -238,7 +218,7 @@ func (c *Client) StartClientLoop(filename string) error {
         }
 		log.Debugf("action: waiting_response | ammount_sent: %v", count)
 		
-		err = c.receiveMessage(count)
+		err = c.receiveBatchResponseMessage(count)
 		
 		if err != nil || finished {
 			break

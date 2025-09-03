@@ -2,6 +2,9 @@ import logging
 import socket
 
 class Socket:
+    BATCH_OP_CODE = 1
+    WINNERS_OP_CODE = 2
+
     def __init__(self, socket):
         self._socket = socket
         self._finished = False
@@ -42,11 +45,11 @@ class Socket:
     def recv_all(self, bufsize: int) -> bytes:
         op_code = self.__recv_one_byte()
 
-        if op_code == 1:
-            return 1, self.__recv_batch(bufsize)
-        elif op_code == 2:
+        if op_code == self.BATCH_OP_CODE:
+            return self.BATCH_OP_CODE, self.__recv_batch(bufsize)
+        elif op_code == self.WINNERS_OP_CODE:
             agency_id = self.__recv_one_byte()
-            return 2, agency_id
+            return self.WINNERS_OP_CODE, agency_id
         else:
             logging.error(f"Uknown opcode: {op_code}")
             return None, None

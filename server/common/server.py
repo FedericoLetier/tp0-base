@@ -25,8 +25,6 @@ class Server:
         communication with a client. After client with communucation
         finishes, servers starts to accept new connections again
         """
-
-        # the server
         client_socket = None
         try:
             while not self._stop:
@@ -112,13 +110,17 @@ class Server:
             if not msg and client_socket.finished():
                 continue
 
-            if op_code == 1:
+            if op_code == Socket.BATCH_OP_CODE:
                 bets, success = self.__parse_lines(msg)
                 self.__store_and_send_response(bets, success, client_socket)
-            else:
+            elif op_code == Socket.WINNERS_OP_CODE:
                 self._waiting_winners.append((msg, client_socket))
                 logging.debug(f"Agency waiting for winner: {msg}")
                 break
+            else:
+                logging.error(f"Invalid op_code: {op_code}")
+                break
+
 
         client_socket = None
 
