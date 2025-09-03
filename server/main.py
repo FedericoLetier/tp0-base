@@ -4,7 +4,9 @@ from configparser import ConfigParser
 from common.server import Server
 import logging
 import os
+import signal
 
+TOTAL_AGENCYS_ENV = 'TOTAL_AGENCYS'
 
 def initialize_config():
     """ Parse env variables or config file to find program config params
@@ -33,7 +35,6 @@ def initialize_config():
 
     return config_params
 
-
 def main():
     config_params = initialize_config()
     logging_level = config_params["logging_level"]
@@ -41,14 +42,20 @@ def main():
     listen_backlog = config_params["listen_backlog"]
 
     initialize_log(logging_level)
-
+    
     # Log config parameters at the beginning of the program to verify the configuration
     # of the component
     logging.debug(f"action: config | result: success | port: {port} | "
                   f"listen_backlog: {listen_backlog} | logging_level: {logging_level}")
 
     # Initialize server and start server loop
-    server = Server(port, listen_backlog)
+    total_agencys = int(os.getenv(TOTAL_AGENCYS_ENV))
+    server = Server(port, listen_backlog, total_agencys)
+    
+    def handle_sigterm(signum, frame):
+        logging.info("action: shutdown | result: success | info: Caught SIGTERM, shutting down")
+        server.close()
+    signal.signal(signal.SIGTERM, handle_sigterm)
     server.run()
 
 def initialize_log(logging_level):

@@ -1,13 +1,18 @@
 import socket
 import logging
-
+from common.utils import Bet, store_bets, load_bets, has_won
+from common.bets_monitor import BetsMonitor
+from common.client_handler import AgencyCommunicationHandler
 
 class Server:
-    def __init__(self, port, listen_backlog):
+    def __init__(self, port, listen_backlog, total_agencys):
         # Initialize server socket
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+        self._bets_monitor = BetsMonitor(total_agencys)
+        self._handlers = []
+        self._stop = False
 
     def run(self):
         """
@@ -17,32 +22,17 @@ class Server:
         communication with a client. After client with communucation
         finishes, servers starts to accept new connections again
         """
-
-        # TODO: Modify this program to handle signal to graceful shutdown
-        # the server
-        while True:
-            client_sock = self.__accept_new_connection()
-            self.__handle_client_connection(client_sock)
-
-    def __handle_client_connection(self, client_sock):
-        """
-        Read message from a specific client socket and closes the socket
-
-        If a problem arises in the communication with the client, the
-        client socket will also be closed
-        """
         try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
-            addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-            # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
-        except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
+            while not self._stop:
+                self.__accept_new_connection()
+                logging.debug(f"Conexión creada, vamos {len(self._handlers)}")
+        except IOError as e:
+            logging.error(f"Error using client socket not catched in loop | error: {e} | shutting down")
+        except Exception as e:
+            logging.error(f"Uknown error not catched in loop | error: {e} | shutting down")
         finally:
-            client_sock.close()
-
+            self.close() 
+        
     def __accept_new_connection(self):
         """
         Accept new connections
@@ -53,6 +43,25 @@ class Server:
 
         # Connection arrived
         logging.info('action: accept_connections | result: in_progress')
-        c, addr = self._server_socket.accept()
+        try: 
+            c, addr = self._server_socket.accept()
+        except OSError as e:
+            if self._stop:
+                return 
+            else:
+                logging.error(f"action: accept_connections | result: fail | error: {e}")
+                return
         logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
-        return c
+        handler = AgencyCommunicationHandler(c, self._bets_monitor)
+        handler.start()
+        self._handlers.append(handler)
+    
+    def close(self):
+        self._stop = True
+        if self._server_socket:
+            for handler in self._handlers:
+                handler.close()
+            self._server_socket.close()
+            self._server_socket = None
+            logging.info("action: shutdown | result: success | info: Server shutdown completed")
+        
