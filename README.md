@@ -206,3 +206,38 @@ RESPONSE=$(timeout 5 docker run --rm --network=tp0_testing_net alpine sh -c "\
   apk add --no-cache netcat-openbsd && \
   echo 'ping' | nc -w 2 server $SERVER_PORT" | tail -n 1)
 ```
+### Ejercicio 4
+Tanto en el cliente como en el servidor se resolvio de una forma muy similar. En el main establezco una funcion que se llama cuando llegue un `SIGTERM`.
+
+En el servidor
+```python
+def handle_sigterm(signum, frame):
+        logging.info("action: shutdown | result: success | info: Caught SIGTERM, shutting down")
+        server.close()
+    signal.signal(signal.SIGTERM, handle_sigterm)
+```
+
+El server define como hacer el cierre
+```
+ def close(self):
+    self._stop = True
+    if self._server_socket:
+        self._server_socket.close() 
+        logging.info("action: shutdown | result: success | info: Server shutdown completed")
+```
+Cerrando el socket de aceptación y cambiando un booleano que frena el loop principal.
+
+El cliente por su parte hace algo similar
+```go
+sigs := make(chan os.Signal, 1)
+signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+ctx, cancel := context.WithCancel(context.Background())	
+go func() {
+	<-sigs
+	cancel()
+	client.Close()
+}()
+```
+Cuando se cierra el cliente se cierra el socket de comunicación y se pone un booleano en falso para que no siga iterando.
+
+
