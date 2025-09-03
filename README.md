@@ -348,3 +348,16 @@ logging.debug(f"Received {len(msg_bytes)} bytes")
 ```
 
 La respuesta del servidor no se modifica.
+
+### Ejercicio 7
+Dado a que ahora hay dos tipos de operaciones distintas, agrego un byte extra al principio de cada paquete. Este byte indica la operación. Cuando se envia `opCode = 1` indica un mensaje de batch y un `opCode = 2` es pedir por las bets.
+
+El servidor cuando recibe un 2, sabe que el byte siguiente es el numero de agencia.
+
+`[opCode(1 byte) = 2][n° agencia (1 byte)]`
+
+Aqui el servidor asume que ya finalizó el envio de mensajes del cliente, por lo tanto mete su socket en una queue junto al número de agencia. Cuando la todas las agencias (numero que se indica por variable de entorno) piden por los resultados, el servidor termina busca del archivo todas las apuestas cargadas, guarda los ganadores separados por agencias y la respuesta es enviada de la siguiente forma:
+
+`dni1,dn2,dni3,...,dnin\n`
+
+De esta forma no cambia la manera que el cliente recibe el mensaje. Leera hasta el salto de liena y sabra cuantos ganadores hay separando por las comas.
