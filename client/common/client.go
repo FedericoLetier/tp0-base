@@ -53,7 +53,7 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
-func (c *Client) sendMessage() {
+func (c *Client) sendMessage(msgID int) {
 	fmt.Fprintf(
 		c.conn,
 		"[CLIENT %v] Message N°%v\n",
@@ -62,11 +62,11 @@ func (c *Client) sendMessage() {
 	)
 }
 
-func (c *Client) receiveMessage () {
-	bufio.NewReader(c.conn).ReadString('\n')
+func (c *Client) receiveMessage() (string, error) {
+	return bufio.NewReader(c.conn).ReadString('\n')
 }
 
-func (c *Cliet) waitAfterSending {
+func (c *Client) waitAfterSending(ctx context.Context) {
 	select {
 	case <-ctx.Done():
     	return
@@ -83,7 +83,7 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 		c.createClientSocket()
 			
 		// TODO: Modify the send to avoid short-write
-		c.sendMessage()
+		c.sendMessage(msgID)
 		msg, err := c.receiveMessage()
 		c.conn.Close()
 
@@ -105,7 +105,7 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 		}
 		
 		// Wait a time between sending one message and the next one
-		c.waitAfterSending()
+		c.waitAfterSending(ctx)
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
