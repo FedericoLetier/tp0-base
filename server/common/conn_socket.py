@@ -1,10 +1,12 @@
 class Socket:
+    END_MSG = '\n'
+    
     def __init__(self, socket):
         self._socket = socket
         
     def recv(self, bufsize: int) -> bytes:
         msg = ''
-        while not msg.endswith('\n'):
+        while not msg.endswith(self.END_MSG):
             try: 
                 chunk = self._socket.recv(bufsize)
             except BlockingIOError:

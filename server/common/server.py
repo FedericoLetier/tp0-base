@@ -4,6 +4,9 @@ from common.conn_socket import Socket
 from common.utils import Bet, store_bets
 
 class Server:
+    BET_FIELDS_SPLITTER = ','
+    BET_FIELDS_AMMOUNT = 6
+
     def __init__(self, port, listen_backlog):
         # Initialize server socket
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -44,8 +47,8 @@ class Server:
             client_sock.close()
             return
         
-        split_msg = msg.split(',')
-        if len(split_msg) != 6:
+        split_msg = msg.split(self.BET_FIELDS_SPLITTER)
+        if len(split_msg) != self.BET_FIELDS_AMMOUNT:
             logging.error("action: receive_message | result: fail | error: Invalid message format")
             client_sock.send("ERROR: Invalid message format\n")
             return
