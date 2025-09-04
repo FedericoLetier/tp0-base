@@ -25,11 +25,9 @@ class Server:
             client_sock = self.__accept_new_connection()
             if client_sock:
                 self.__handle_client_connection(client_sock)
+                client_sock = None
         
-        if client_sock:
-            client_sock.close()
         self.close()
-        exit(0)
 
     def __handle_client_connection(self, client_sock):
         """
