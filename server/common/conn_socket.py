@@ -1,6 +1,8 @@
 import logging
 
 class Socket:
+    SIZE_BYTES = 2
+
     def __init__(self, socket):
         self._socket = socket
         self._finished = False
@@ -17,7 +19,7 @@ class Socket:
         return msg_bytes
     
     def recv_all(self, bufsize: int) -> bytes:
-        size_bytes = self.__recv_n_bytes(2)
+        size_bytes = self.__recv_n_bytes(self.SIZE_BYTES)
         if self._finished:
             return None
         msg_size = int.from_bytes(size_bytes, "big")
