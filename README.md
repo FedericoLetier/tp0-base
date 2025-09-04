@@ -374,7 +374,13 @@ El acceso al archivo donde se guardan todas las apuestas esta regulado por un mo
 Para implementar que todos los handlers esperen a que terminen de enviar todas las apuestas todas las agencias, se agregó una abrrier en la lectura del archivo. Esta barrier esta configurada con la cantidad de agencias. Cuando el último handler quiera leer, la barrier se va a desbloquear. Luego de la barrier se vuelve a regular el acceso al archivo con un mutex.
 
 ```python
-self._barrier.wait()
-with self._lock:
-    return load_bets()
+def get_agency_winners(self, agency_number) -> list[Bet]:
+    self._barrier.wait()
+    with self._lock:
+        # Los ganadores se calculan solo una vez. El primer handler que
+        # tome el lock será el encargado de eso.
+        # Permite no tener que devolver el arreglo de todos las apuestas
+        if self._bets_winners is None:
+            self.__calculate_winners()
+        return self._bets_winners[agency_number]
 ```
