@@ -57,14 +57,13 @@ class Server:
         self._handlers.append(handler)
     
     def close(self):
-        self._stop = True
-        if self._server_socket:
+        if not self._stop:
+            self._stop = True
             self._bets_monitor.close()
             for handler in self._handlers:
                 handler.close()
             for handler in self._handlers:
                 handler.join()
             self._server_socket.close()
-            self._server_socket = None
             logging.info("action: shutdown | result: success | info: Server shutdown completed")
         
