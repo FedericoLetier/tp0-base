@@ -1,7 +1,7 @@
 import threading
 import logging
 from common.conn_socket import Socket
-from common.utils import Bet, has_won
+from common.utils import Bet
 
 
 class AgencyCommunicationHandler(threading.Thread):
@@ -80,12 +80,7 @@ class AgencyCommunicationHandler(threading.Thread):
 
     def __send_winners(self):
         logging.info("action: sorteo | result: success")
-        bets = self._bets_monitor.load_bets()
-        winners = []
-        for bet in bets:
-            if not has_won(bet) or bet.agency != self._agency_number:
-                continue
-            winners.append(bet.document)
+        winners = self._bets_monitor.get_agency_winners(self._agency_number)
         
         if len(winners) == 0:
             logging.debug(f"agency {self._agency_number} has no winners")
