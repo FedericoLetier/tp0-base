@@ -13,6 +13,7 @@ const BET_SPLITTER_BYTE = '\n'
 const BET_SPLITTER_STR = "\n"
 const BATCH_OP_CODE = 1
 const WINNERS_OP_CODE = 2
+const SIZE_BYTES = 2
 
 type ClientSocket struct {
 	conn   net.Conn
@@ -86,7 +87,7 @@ func (cs *ClientSocket) SendBatch(bets []Bet) error {
         return fmt.Errorf("batch demasiado grande: %d bytes", len(data))
     }
 
-    size := make([]byte, 2)
+    size := make([]byte, SIZE_BYTES)
     binary.BigEndian.PutUint16(size, uint16(len(data)))
 	log.Debugf("action: send_batch | result: in_progress | size: %d bytes", len(data))
 	err := cs.sendAll(append(size, data...), BATCH_OP_CODE)
