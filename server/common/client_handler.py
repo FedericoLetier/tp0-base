@@ -27,8 +27,19 @@ class AgencyCommunicationHandler(threading.Thread):
             self.close()
 
     def _run(self):
-        self.__recieve_bets_batch()
-        self.__send_winners()
+        try:
+            self.__recieve_bets_batch()
+            self.__send_winners()
+        except IOError as e:
+            if not self._closed:
+                logging.error(f"Error using client socket | error: {e} | shutting down")
+        except threading.BrokenBarrierError:
+            if not self._closed:
+                logging.error(f"Barrier broke waiting for winners | error: {e} | shutting down")
+        except Exception as e:
+            logging.error(f"Unexpected error | error: {e} | shutting down")
+        finally:
+            self.close()
 
     def __recieve_bets_batch(self):
         success = True

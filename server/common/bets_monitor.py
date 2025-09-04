@@ -30,3 +30,6 @@ class BetsMonitor:
             if self._bets_winners is None:
                 self.__calculate_winners()
             return self._bets_winners[agency_number]
+        
+    def close(self):
+        self._barrier.abort()

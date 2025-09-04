@@ -44,7 +44,7 @@ type BetStored struct {
 type Client struct {
 	config ClientConfig
 	socket *ClientSocket
-	keep_running bool
+	keepRunning bool
 	previousBet BetStored
 }
 
@@ -54,7 +54,7 @@ func NewClient(config ClientConfig) *Client {
 	previousBet := BetStored{ sended: true, }
 	client := &Client{	
 		config: config,
-		keep_running: true,
+		keepRunning: true,
 		previousBet: previousBet,
 	}
 	return client
@@ -210,7 +210,7 @@ func (c *Client) StartClientLoop(filename string) error {
         return err
     }
 	scanner := bufio.NewScanner(file)
-    for c.keep_running {
+    for c.keepRunning {
 		finished, count, err := c.sendBatch(scanner)
         if err != nil || count == 0 {
             break
@@ -232,10 +232,10 @@ func (c *Client) StartClientLoop(filename string) error {
 }
 
 func (c *Client) Close() {
-	if !c.keep_running {
+	if !c.keepRunning {
 		return
 	}
 	log.Infof("action: shutdown | result: success | info: Client shutdown completed")
 	c.socket.Close()
-	c.keep_running = false
+	c.keepRunning = false
 }
