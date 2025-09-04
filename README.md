@@ -199,7 +199,7 @@ Y lo mismo para el servidor.
 De esta forma no hace falta reconstruir la imagen para cambiar la config.
 
 ### Ejercicio 3
-Para verificar la conexión del servidor solamente hay que ejecutar `./validar-echo-server.sh`. Este intenta mandar con netcat un mensaje al servidor, que utiliza `server` para la ip y una variable definida dentro que toma el puerto del archivo de configuración (para no harcodear). Usa un container temporal que se remueve automaticamente al finalizar.
+Para verificar la conexión del servidor solamente hay que ejecutar `./validar-echo-server.sh`. Este intenta mandar con netcat un mensaje al servidor,  utilizando `server` para la ip y una variable definida dentro para el puerto. La variable toma el valor del puerto del archivo de configuración del server (para no harcodear). Usa un container temporal que se remueve automaticamente al finalizar.
 
 ```bash
 RESPONSE=$(timeout 5 docker run --rm --network=tp0_testing_net alpine sh -c "\
@@ -207,6 +207,10 @@ RESPONSE=$(timeout 5 docker run --rm --network=tp0_testing_net alpine sh -c "\
   echo 'ping' | nc -w 2 server $SERVER_PORT" | tail -n 1)
 ```
 ### Ejercicio 4
+
+De aqui en adelante, para ejecutar se utiliza el comando `make docker-compose-up`. 
+En este ejercico con hacer `make docker-compose-down` se envia el sigterm para el shutdown.
+
 Tanto en el cliente como en el servidor se resolvio de una forma muy similar. En el main establezco una funcion que se llama cuando llegue un `SIGTERM`.
 
 En el servidor
@@ -218,10 +222,10 @@ def handle_sigterm(signum, frame):
 ```
 
 El server define como hacer el cierre
-```
+```python
  def close(self):
-    self._stop = True
-    if self._server_socket:
+    if not self._stop:
+        self._stop = True
         self._server_socket.close() 
         logging.info("action: shutdown | result: success | info: Server shutdown completed")
 ```
@@ -241,12 +245,12 @@ go func() {
 Cuando se cierra el cliente se cierra el socket de comunicación y se pone un booleano en falso para que no siga iterando.
 
 ### Ejercicio 5
-Para poder establecer los parametros de la apuesta (Nombre, apellido, etc.) los setee como variable de entorno que se configuran en el docker compose. De esta forma el cliente tiene acceso a los datos facilmente. 
+Para poder establecer los parametros de la apuesta (Nombre, apellido, etc.) los setee como variable de entorno que se configuran en el docker compose. De esta forma el cliente tiene acceso a los datos una vez que se levanta. 
 
 El protocolo es muy sencillo:
 `NOMBRE,APELLIDO,DOCUMENTO,NACIMIENTO,NUMERO\n`
 
-Como cada comunicación entre cliente y servidor es solo de a una apuesta. El servidor va a intentar leer todo hasta que le llegue un `\n` final. Luego los campos los separa por comas. 
+Como cada intercambio entre cliente y servidor es solo de a una apuesta (no porque se cierre el socket, sino porque envia una apuesta, espera la respuesta y repite). El servidor va a intentar leer todo hasta que le llegue un `\n` final. Luego los campos los separa por comas. 
 
 La respuesta del servidor también es muy simple:
 `SUCCESS: mensaje de success\n`
@@ -314,10 +318,20 @@ func (cs *ClientSocket) SendBet(bet Bet) error {
 	return nil
 }
 ```
-Esto es mas similar a lo que pasa en el read del servidor.
-Escribo, verifico cuanto escribi y modifico la variable temporal. Hasta que lo que llevo escrito no iguale el tamaño no paro de escirbir.
+Escribo, verifico cuanto escribi y modifico la variable temporal. Hasta que lo escrito no iguale el tamaño no paro de iterar.
 
 ### Ejercicio 6
+Este ejercicio se ejecuta igual que los anteriores. El archivo que utiliza para comunicar es el que se encuentre en `.data/agency-{$nAgencia}`. Asumo que el n° de agencia es igual al `CLI_ID`, por lo tanto el cliente 1 leera agency-1.csv y asi. Esto se ve en el docker compose:
+```python 
+for i in range(1, cantidad_clientes + 1):
+    contenido += f"""  client{i}:
+    container_name: client{i}
+    image: client:latest
+    volumes:
+      - ./client/config.yaml:/config.yaml:ro
+      - ./.data/agency-{i}.csv:/.data/agency.csv:ro """ # Esta linea inserta el archivo en la imagen sin necesidad de volver a levantarla.
+```
+
 Los cambios principales estan en la comunicación. El protocolo se vio un poco modificado. Ahora se envia un tamaño y luego los bytes.
 
 `[tamaño (2bytes int)][data]`
@@ -331,7 +345,8 @@ El cliente tiene dos loops. El mas grande para iterar por batch si el archivo no
 El servidor por lo tanto solo tiene que leer 2 bytes para ver cuanto va a recibir, luego lee hasta llegar a ese numero de bytes recibidos y por último para parsearlo solo debe hacer un split por `\n`
 
 ```python
-size_bytes = self._socket.recv(2)
+# No se recibe asi porque podria ser un short write, solo para mostrar. Se abstrayo en una funcion para recibir n bytes
+size_bytes = self._socket.recv(2) 
 if not size_bytes:
     self._finished = True
     return None
@@ -350,7 +365,13 @@ logging.debug(f"Received {len(msg_bytes)} bytes")
 La respuesta del servidor no se modifica.
 
 ### Ejercicio 7
+La forma ejecutar en este ejercicio y el siguiente (8) no cambia al anterior.
+
 Dado a que ahora hay dos tipos de operaciones distintas, agrego un byte extra al principio de cada paquete. Este byte indica la operación. Cuando se envia `opCode = 1` indica un mensaje de batch y un `opCode = 2` es pedir por las bets.
+
+Cuando se recibe un 1, luego sigue el mismo formato que se establecio en el punto anterior.
+
+`[opCode(1 byte) = 1][tamaño = n (2 bytes int)][apuestas (n bytes)]`
 
 El servidor cuando recibe un 2, sabe que el byte siguiente es el numero de agencia.
 
@@ -360,7 +381,7 @@ Aqui el servidor asume que ya finalizó el envio de mensajes del cliente, por lo
 
 `dni1,dn2,dni3,...,dnin\n`
 
-De esta forma no cambia la manera que el cliente recibe el mensaje. Leera hasta el salto de liena y sabra cuantos ganadores hay separando por las comas.
+De esta forma, no cambia la manera que el cliente recibe el mensaje. Leera hasta el salto de liena y sabra cuantos ganadores hay separando por las comas.
 
 ### Ejercicio 8
 Para este punto en el ejercicio, el cliente no sufrio cambios.
