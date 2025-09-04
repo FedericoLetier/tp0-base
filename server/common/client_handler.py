@@ -1,7 +1,7 @@
 import threading
 import logging
 from common.conn_socket import Socket
-from common.utils import Bet, has_won
+from common.utils import Bet
 
 
 class AgencyCommunicationHandler(threading.Thread):
@@ -27,8 +27,19 @@ class AgencyCommunicationHandler(threading.Thread):
             self.close()
 
     def _run(self):
-        self.__recieve_bets_batch()
-        self.__send_winners()
+        try:
+            self.__recieve_bets_batch()
+            self.__send_winners()
+        except IOError as e:
+            if not self._closed:
+                logging.error(f"Error using client socket | error: {e} | shutting down")
+        except threading.BrokenBarrierError:
+            if not self._closed:
+                logging.error(f"Barrier broke waiting for winners | error: {e} | shutting down")
+        except Exception as e:
+            logging.error(f"Unexpected error | error: {e} | shutting down")
+        finally:
+            self.close()
 
     def __recieve_bets_batch(self):
         success = True
@@ -80,12 +91,7 @@ class AgencyCommunicationHandler(threading.Thread):
 
     def __send_winners(self):
         logging.info("action: sorteo | result: success")
-        bets = self._bets_monitor.load_bets()
-        winners = []
-        for bet in bets:
-            if not has_won(bet) or bet.agency != self._agency_number:
-                continue
-            winners.append(bet.document)
+        winners = self._bets_monitor.get_agency_winners(self._agency_number)
         
         if len(winners) == 0:
             logging.debug(f"agency {self._agency_number} has no winners")
