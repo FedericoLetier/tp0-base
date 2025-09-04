@@ -149,11 +149,10 @@ class Server:
         return Socket(c)
     
     def close(self):
-        self._stop = True
-        if self._server_socket:
+        if not self._stop:
+            self._stop = True
             for _, socket in self._waiting_winners:
                 socket.close()
             self._server_socket.close()
-            self._server_socket = None
             logging.info("action: shutdown | result: success | info: Server shutdown completed")
         
