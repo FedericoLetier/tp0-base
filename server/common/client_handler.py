@@ -19,15 +19,6 @@ class AgencyCommunicationHandler(threading.Thread):
 
     def run(self):
         try:
-            self._run()
-        except IOError as e:
-            if not self._stop:
-                logging.error(f"Error using client socket | error: {e} | shutting down")
-        finally:
-            self.close()
-
-    def _run(self):
-        try:
             self.__recieve_bets_batch()
             self.__send_winners()
         except IOError as e:
@@ -40,7 +31,7 @@ class AgencyCommunicationHandler(threading.Thread):
             logging.error(f"Unexpected error | error: {e} | shutting down")
         finally:
             self.close()
-
+        
     def __recieve_bets_batch(self):
         success = True
         while not self._socket.finished() and not self._closed:
@@ -104,8 +95,8 @@ class AgencyCommunicationHandler(threading.Thread):
 
     def close(self):
         if not self._closed:
-            self._socket.close()
             self._closed = True
+            self._socket.close()
             logging.info("action: shutdown | result: success | info: handler shutdown completed")
 
         
