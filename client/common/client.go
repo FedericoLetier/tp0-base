@@ -92,7 +92,7 @@ func (c *Client) receiveMessage() {
 		c.bet.Document, c.bet.Number)
 }
 
-func (c *Cliet) waitAfterSending {
+func (c *Client) waitAfterSending(ctx context.Context) {
 	select {
 	case <-ctx.Done():
     	return
@@ -119,9 +119,9 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 		}
 	
 		// Wait a time between sending one message and the next on: receione
-		c.waitAfterSending()
+		c.waitAfterSending(ctx)
 	}
-	self.Close()
+	c.Close()
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
 
