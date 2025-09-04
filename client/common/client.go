@@ -7,6 +7,8 @@ import (
 	"github.com/op/go-logging"
 )
 
+const SUCCESS_RESPONSE = "SUCCESS: Bet stored\n"
+
 type Bet struct {
     Name    string
     Surname  string
@@ -30,7 +32,7 @@ type Client struct {
 	config ClientConfig
 	bet Bet
 	socket *ClientSocket
-	keep_running bool
+	keepRunning bool
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -39,7 +41,7 @@ func NewClient(config ClientConfig, bet Bet) *Client {
 	client := &Client{	
 		config: config,
 		bet: bet,
-		keep_running: true,
+		keepRunning: true,
 	}
 	return client
 }
@@ -76,8 +78,8 @@ func (c *Client) sendBet() error {
 func (c *Client) receiveMessage() {
 	msg, err := c.socket.ReceiveResponse()
 
-	if msg != "SUCCESS: Bet stored\n" {
-		if c.keep_running {
+	if msg != SUCCESS_RESPONSE {
+		if c.keepRunning {
 			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
 				c.config.ID,
 				err,
@@ -90,11 +92,19 @@ func (c *Client) receiveMessage() {
 		c.bet.Document, c.bet.Number)
 }
 
+func (c *Cliet) waitAfterSending {
+	select {
+	case <-ctx.Done():
+    	return
+	case <-time.After(c.config.LoopPeriod):
+	}
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop(ctx context.Context) {
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed	
-	for msgID := 1; msgID <= c.config.LoopAmount && c.keep_running; msgID++ {
+	for msgID := 1; msgID <= c.config.LoopAmount && c.keepRunning; msgID++ {
 		// Create the connection the server in every loop iteration. Send an		
 		if c.createClientSocket() == nil {
 			err := c.sendBet()
@@ -104,22 +114,21 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 			c.receiveMessage()
 		}
 
-		if !c.keep_running {
+		if !c.keepRunning {
 			continue
 		}
 	
 		// Wait a time between sending one message and the next on: receione
-		select {
-		case <-ctx.Done():
-    		return
-		case <-time.After(c.config.LoopPeriod):
-		}
+		c.waitAfterSending()
 	}
+	self.Close()
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
 
 func (c *Client) Close() {
-	log.Infof("action: shutdown | result: success | info: Client shutdown completed")
-	c.socket.Close()
-	c.keep_running = false
+	if c.keepRunning {
+		log.Infof("action: shutdown | result: success | info: Client shutdown completed")
+		c.socket.Close()
+		c.keepRunning = false
+	}
 }

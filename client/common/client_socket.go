@@ -38,7 +38,7 @@ func (cs *ClientSocket) ReceiveResponse() (string, error) {
 	reader := bufio.NewReader(cs.conn)
 	
 	msg, err := reader.ReadString(BET_SPLITTER)
-	if err != nil && msg != "SUCCESS: Bet stored\n" {
+	if err != nil && msg != SUCCESS_RESPONSE {
 		return "", err
 	}
 
