@@ -1,5 +1,4 @@
 import logging
-import socket
 
 class Socket:
     def __init__(self, socket):
@@ -7,21 +6,26 @@ class Socket:
         self._finished = False
         self._closed = False
         
-    def recv_all(self, bufsize: int) -> bytes:
-        size_bytes = self._socket.recv(2)
-        if not size_bytes:
-            self._finished = True
-            return None
-        msg_size = int.from_bytes(size_bytes, "big")
-        logging.debug(f"Expecting to receive {msg_size} bytes")
-
+    def __recv_n_bytes(self, n):
         msg_bytes = b''
-        while len(msg_bytes) < msg_size:
-            chunk = self._socket.recv(min(bufsize, msg_size - len(msg_bytes)))
+        while len(msg_bytes) < n:
+            chunk = self._socket.recv(n - len(msg_bytes))
             if not chunk:
                 self._finished = True
                 return None
             msg_bytes += chunk
+        return msg_bytes
+    
+    def recv_all(self, bufsize: int) -> bytes:
+        size_bytes = self.__recv_n_bytes(2)
+        if self._finished:
+            return None
+        msg_size = int.from_bytes(size_bytes, "big")
+        logging.debug(f"Expecting to receive {msg_size} bytes")
+
+        if bufsize < msg_size:
+            logging.error(f"Message too big {msg_size}. Bigger than max buf {bufsize}")
+        msg_bytes = self.__recv_n_bytes(msg_size)
         logging.debug(f"Received {len(msg_bytes)} bytes")
 
         return msg_bytes.decode("utf-8")
