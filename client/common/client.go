@@ -53,6 +53,27 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
+func (c *Client) sendMessage() {
+	fmt.Fprintf(
+		c.conn,
+		"[CLIENT %v] Message N°%v\n",
+		c.config.ID,
+		msgID,
+	)
+}
+
+func (c *Client) receiveMessage () {
+	bufio.NewReader(c.conn).ReadString('\n')
+}
+
+func (c *Cliet) waitAfterSending {
+	select {
+	case <-ctx.Done():
+    	return
+	case <-time.After(c.config.LoopPeriod):
+	}
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop(ctx context.Context) {
 	// There is an autoincremental msgID to identify every message sent
@@ -62,13 +83,8 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 		c.createClientSocket()
 			
 		// TODO: Modify the send to avoid short-write
-		fmt.Fprintf(
-			c.conn,
-			"[CLIENT %v] Message N°%v\n",
-			c.config.ID,
-			msgID,
-		)
-		msg, err := bufio.NewReader(c.conn).ReadString('\n')
+		c.sendMessage()
+		msg, err := c.receiveMessage()
 		c.conn.Close()
 
 		if err != nil && c.keep_running {
@@ -76,24 +92,20 @@ func (c *Client) StartClientLoop(ctx context.Context) {
 				c.config.ID,
 				err,
 			)
-			return
+			continue
 		}
+
+		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
+		c.config.ID, 
+		msg,
+		)
 
 		if !c.keep_running {
 			continue
 		}
 		
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-		c.config.ID, 
-		msg,
-		)
-	
 		// Wait a time between sending one message and the next one
-		select {
-		case <-ctx.Done():
-    		return
-		case <-time.After(c.config.LoopPeriod):
-		}
+		c.waitAfterSending()
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
