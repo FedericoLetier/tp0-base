@@ -83,8 +83,8 @@ class Server:
         return Socket(c)
     
     def close(self):
-        self._stop = True
-        if self._server_socket:
+        if not self._stop:
+            self._stop = True
             self._server_socket.close() 
             logging.info("action: shutdown | result: success | info: Server shutdown completed")
         
